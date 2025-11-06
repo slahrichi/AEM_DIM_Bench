@@ -8,13 +8,17 @@ sys.path.append('../utils/')
 # Torch
 
 # Own
-import flag_reader
-from class_wrapper import Network
-from model_maker import Forward, Backward
+from . import flag_reader
+from .class_wrapper import Network
+from .model_maker import Forward, Backward
 from utils import data_reader,helper_functions
 from utils.helper_functions import load_flags
 from utils.evaluation_helper import plotMSELossDistrib
 from utils.evaluation_helper import get_test_ratio_helper
+from pathlib import Path
+PKG_DIR = Path(__file__).resolve().parent          # .../AEM_DIM_Bench/Tandem
+MODEL_BASE = PKG_DIR / "models"
+
 
 # Libs
 from NA import predict
@@ -25,14 +29,19 @@ def predict(model_dir, Ytruth_file ,multi_flag=False):
     Predict the output from given spectra
     """
     print("Retrieving flag object for parameters")
-    if (model_dir.startswith("models")):
-        model_dir = model_dir[7:]
-        print("after removing prefix models/, now model_dir is:", model_dir)
-    if model_dir.startswith('/'):                   # It is a absolute path
-        flags = helper_functions.load_flags(model_dir)
+    p = Path(model_dir)
+    if p.is_absolute():
+        flags = helper_functions.load_flags(p)
+        model_key = p.name
     else:
-        flags = helper_functions.load_flags(os.path.join("models", model_dir))
-    flags.eval_model = model_dir                    # Reset the eval mode
+        # accept both "retrain7Yang" and "models/retrain7Yang"
+        model_key = str(p).split("/", 1)[1] if str(p).startswith("models/") else str(p)
+        flags = load_flags(MODEL_BASE / model_key)
+
+    flags.eval_model = model_key
+    print("Loaded flags from:", MODEL_BASE / model_key)
+
+
     
     ntwk = Network(Forward, Backward, flags, train_loader=None, test_loader=None, inference_mode=True, saved_model=flags.eval_model)
     print("number of trainable parameters is :")
@@ -49,7 +58,7 @@ def predict_different_dataset(multi_flag=False):
     This function is to evaluate all different datasets in the model with one function call
     """
     step_func_dir = '/home/sr365/MM_Bench/Data/step_func'
-    for model in os.listdir('models/'):
+    for model in os.listdir(MODEL_BASE):
         if 'best' in model:
             if 'Yang' in model:
                 Ytruth_file = os.path.join(step_func_dir, 'Yang'+'step_function.txt')
@@ -69,11 +78,15 @@ def evaluate_from_model(model_dir, multi_flag=False, eval_data_all=False, moduli
     """
     # Retrieve the flag object
     print("Retrieving flag object for parameters")
-    if (model_dir.startswith("models")):
-        model_dir = model_dir[7:]
-        print("after removing prefix models/, now model_dir is:", model_dir)
-    flags = load_flags(os.path.join("models", model_dir))
-    flags.eval_model = model_dir                    # Reset the eval mode
+    p = Path(model_dir)
+    if p.is_absolute():
+        flags = load_flags(p)
+        model_key = p.name
+    else:
+        model_key = str(p).split("/", 1)[1] if str(p).startswith("models/") else str(p)
+        flags = load_flags(MODEL_BASE / model_key)
+
+    flags.eval_model = model_key
     flags.test_ratio = get_test_ratio_helper(flags)
 
     # Get the data
@@ -119,20 +132,19 @@ def evaluate_all(models_dir="models"):
     This function evaluate all the models in the models/. directory
     :return: None
     """
-    for file in os.listdir(models_dir):
-        if os.path.isfile(os.path.join(models_dir, file, 'flags.obj')):
-            evaluate_from_model(os.path.join(models_dir, file))
-    return None
+    base = MODEL_BASE if models_dir is None else Path(models_dir)
+    for sub in base.iterdir():
+        if (sub / "flags.obj").is_file():
+            evaluate_from_model(sub.name)
 
 
 def evaluate_different_dataset(multi_flag=False, eval_data_all=False, modulized_flag=False):
     """
     This function is to evaluate all different datasets in the model with one function call
     """
-    for model in os.listdir('models/'):
+    for model in os.listdir(MODEL_BASE):
         if 'new_best' in model and 'Peu' in model:
-            evaluate_from_model(model, multi_flag=multi_flag, 
-                        eval_data_all=eval_data_all, modulized_flag=modulized_flag)
+            evaluate_from_model(model, multi_flag=multi_flag, eval_data_all=eval_data_all, modulized_flag=modulized_flag)
 
 if __name__ == '__main__':
     # Read the flag, however only the flags.eval_model is used and others are not used
@@ -145,7 +157,7 @@ if __name__ == '__main__':
     ### Call the evaluate function from model, this "evaluate_from_model" uses the eval_model field in your
     ### "useless_flag" that reads out from your current parameters.py file in case you want to evaluate single model
     #evaluate_from_model(useless_flags.eval_model)
-    #evaluate_from_model("models/Peurifoy_best_model")
+    evaluate_from_model("retrain7Yang")
     #evaluate_from_model(useless_flags.eval_model, multi_flag=True)
     #evaluate_from_model(useless_flags.eval_model, multi_flag=False, eval_data_all=True)
     
@@ -153,7 +165,7 @@ if __name__ == '__main__':
     #Multiple model evaluation #
     ############################
     ### Call the "evaluate_different_dataset" function to evaluate all the models in the "models" folder, the multi_flag is to control whether evaulate across T or only do T=1 (if set to False), make sure you change the model name in function if you have any different model name 
-    evaluate_different_dataset(multi_flag=False, eval_data_all=False)
+    #evaluate_different_dataset(multi_flag=False, eval_data_all=False)
     # evaluate_different_dataset(multi_flag=True)
     #evaluate_all("models/MM")
 
