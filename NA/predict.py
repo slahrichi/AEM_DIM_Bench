@@ -6,6 +6,7 @@ import os
 import sys
 sys.path.append('../utils/')
 import time
+from pathlib import Path
 # Torch
 
 # Own
@@ -21,6 +22,12 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+# PATHS
+PROJECT_ROOT = Path(__file__).resolve().parents[1]              # .../AEM_DIM_Bench
+DATA_ROOT    = PROJECT_ROOT / "Data" / "Yang_sim"
+MODEL_DIR    = DATA_ROOT / "model_param"
+DATAIN_DIR   = DATA_ROOT / "dataIn"
+STATE_DIR    = DATA_ROOT / "state_dicts"
 
 def predict_from_model(pre_trained_model, Xpred_file, no_plot=True, load_state_dict=None):
     """
@@ -159,16 +166,16 @@ def creat_mm_dataset():
     :return:
     """
     # Define model folder
-    model_folder = os.path.join('..', 'Data', 'Yang_sim', 'model_param')
+    model_folder = MODEL_DIR
     # Load the flags to construct the model
-    flags = load_flags(model_folder)
-    flags.eval_model = model_folder
+    flags = load_flags(model_folder)                 # accepts Path
+    flags.eval_model = str(model_folder)            # ensure downstream code gets str
     ntwk = Network(NA, flags, train_loader=None, test_loader=None, inference_mode=True, saved_model=flags.eval_model)
     # This is the full file version, which would take a while. Testing pls use the next line one
-    geometry_points = os.path.join('..', 'Data', 'Yang_sim', 'dataIn', 'data_x.csv')
+    geometry_points = DATAIN_DIR / "data_x.csv"
     # Small version is for testing, the large file taks a while to be generated...
     #geometry_points = os.path.join('..', 'Simulated_DataSets', 'Meta_material_Neural_Simulator', 'dataIn', 'data_x_small.csv')
-    Y_filename = geometry_points.replace('data_x', 'data_y')
+    Y_filename = geometry_points.parent / geometry_points.name.replace("data_x", "data_y")
 
     # Set up the list of prediction files
     pred_list = []
@@ -177,8 +184,9 @@ def creat_mm_dataset():
     # for each model saved, load the dictionary and do the inference
     for i in range(num_models):
         print('predicting for {}th model saved'.format(i+1))
-        state_dict_file = os.path.join('..', 'Data', 'Yang_sim', 'state_dicts', 'mm{}.pt'.format(i))
-        pred_file, truth_file = ntwk.predict(Xpred_file=geometry_points, load_state_dict=state_dict_file, no_save=True)
+        state_dict_file = STATE_DIR / f"mm{i}.pt"
+        pred_file, truth_file = ntwk.predict(Xpred_file=str(geometry_points), 
+        load_state_dict=str(state_dict_file), no_save=True)
         pred_list.append(pred_file)
 
     Y_ensemble = np.zeros(shape=(*np.shape(pred_file), num_models))
@@ -190,20 +198,20 @@ def creat_mm_dataset():
     #X = pd.read_csv(geometry_points, header=None, sep=' ').values
     #MM_data = np.concatenate((X, Y_ensemble), axis=1)
     #MM_data_file = geometry_points.replace('data_x', 'dataIn/MM_data')
-    np.savetxt(Y_filename, Y_ensemble)
+    np.savetxt(str(Y_filename), Y_ensemble)
     #np.savetxt(MM_data_file, MM_data)
 
 
 if __name__ == '__main__':
     # To create Meta-material dataset, use this line 
-    #start = time.time()
-    #creat_mm_dataset()
-    #print('Time is spend on producing MM dataset is {}'.format(time.time()-start))
+    start = time.time()
+    creat_mm_dataset()
+    print('Time is spend on producing MM dataset is {}'.format(time.time()-start))
     
     # multi evaluation 
-    method_list = ['Tandem','MDN','INN','cINN','VAE','GA','NA','NN']
-    for method in method_list:
-       predict_ensemble_for_all('../Data/Yang_sim/state_dicts/', '../mm_bench_multi_eval/' + method + '/Yang_sim/', no_plot=True)  
+    #method_list = ['Tandem','MDN','INN','cINN','VAE','GA','NA','NN']
+    #for method in method_list:
+    #   predict_ensemble_for_all('../Data/Yang_sim/state_dicts/', '../mm_bench_multi_eval/' + method + '/Yang_sim/', no_plot=True)  
     
     #predict_ensemble_for_all('../Data/Yang_sim/state_dicts/', '/home/sr365/MM_Bench/GA/temp-dat/GA1_chrome_gen_300/Yang_sim', no_plot=True)  
     

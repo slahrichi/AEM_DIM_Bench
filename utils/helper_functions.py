@@ -12,6 +12,7 @@ import shutil
 from copy import deepcopy
 import sys
 import pickle
+from pathlib import Path
 import numpy as np
 from Data.Peurifoy.generate_Peurifoy import simulate as peur_sim
 from Data.Chen.generate_chen import simulate as chen_sim
@@ -157,7 +158,13 @@ def load_flags(save_dir, save_file="flags.obj"):
     :param save_file: The file name of the file, usually flags.obj
     :return: flags
     """
-    with open(os.path.join(save_dir, save_file), 'rb') as f:     # Open the file
+    #with open(os.path.join(save_dir, save_file), 'rb') as f:     # Open the file
+    # If save_dir is relative, make it relative to the repo root
+    p = Path(save_dir)
+    if not p.is_absolute():
+        repo_root = Path(__file__).resolve().parents[1]  # AEM_DIM_Bench/
+        p = (repo_root / p).resolve()
+    with open(p / save_file, 'rb') as f:   
         flags = pickle.load(f)                                  # Use pickle to inflate the obj back to RAM
     return flags
 
