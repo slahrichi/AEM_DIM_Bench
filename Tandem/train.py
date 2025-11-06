@@ -15,7 +15,6 @@ PKG_ROOT     = Path(__file__).resolve().parent       # .../AEM_DIM_Bench/Tandem
 MODEL_BASE   = PKG_ROOT / "models"                   # <-- keep models inside Tandem/
 MODEL_BASE.mkdir(exist_ok=True)
 
-
 # Own
 from . import flag_reader
 from utils import data_reader
@@ -31,7 +30,6 @@ def training_from_flag(flags):
     """
     # Get the data
     train_loader, test_loader = data_reader.read_data(flags)
-
     print("Making network now")
 
     # Make Network

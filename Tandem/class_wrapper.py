@@ -21,11 +21,14 @@ import pandas as pd
 # Own module
 from utils.time_recorder import time_keeper
 from utils.helper_functions import simulator
+from pathlib import Path
 
+PKG_ROOT = Path(__file__).resolve().parent                 # .../AEM_DIM_Bench/Tandem
+DEFAULT_MODEL_BASE = PKG_ROOT / "models"                   
 
 class Network(object):
     def __init__(self, model_fn_f, model_fn_b, flags, train_loader, test_loader,
-                 ckpt_dir=os.path.join(os.path.abspath(''), 'models'),
+                 ckpt_dir=None,
                  inference_mode=False, saved_model=None):
         """
         The initializer of the Network class which is the wrapper of our neural network, this is for the Tandem model
@@ -43,15 +46,21 @@ class Network(object):
         self.load_forward_ckpt_dir = flags.load_forward_ckpt_dir    # The pre-trained forward model ckpt dir
         print("The pretrian model to load is:", self.load_forward_ckpt_dir)
         self.flags = flags                                      # The Flags containing the specs
+        
+        # Resolve model base dir: default to Tandem/models
+        model_base = Path(ckpt_dir) if ckpt_dir is not None else DEFAULT_MODEL_BASE
+        model_base.mkdir(parents=True, exist_ok=True)
+
         if inference_mode:                                      # If inference mode, use saved model
-            self.ckpt_dir = os.path.join(ckpt_dir, saved_model)
+            self.ckpt_dir = str((model_base / saved_model))
             self.saved_model = saved_model
             print("This is inference mode, the ckpt is", self.ckpt_dir)
         else:                                                   # training mode, create a new ckpt folder
             if flags.model_name is None:                    # leave custume name if possible
-                self.ckpt_dir = os.path.join(ckpt_dir, time.strftime('%Y%m%d_%H%M%S', time.localtime()))
+                self.ckpt_dir = str(model_base / time.strftime('%Y%m%d_%H%M%S', time.localtime()))
             else:
-                self.ckpt_dir = os.path.join(ckpt_dir, flags.model_name)
+                self.ckpt_dir = str(model_base / flags.model_name)
+        Path(self.ckpt_dir).mkdir(parents=True, exist_ok=True)
         self.model_f, self.model_b = self.create_model()                        # The model itself
         self.loss = self.make_loss()                            # The loss function
         self.optm_f = None                                      # The optimizer: Initialized at train() due to GPU
