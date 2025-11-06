@@ -8,13 +8,19 @@ import shutil
 import sys
 sys.path.append('../utils/')
 
-# Torch
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]   # .../AEM_DIM_Bench
+PKG_ROOT     = Path(__file__).resolve().parent       # .../AEM_DIM_Bench/Tandem
+MODEL_BASE   = PKG_ROOT / "models"                   # <-- keep models inside Tandem/
+MODEL_BASE.mkdir(exist_ok=True)
+
 
 # Own
-import flag_reader
+from . import flag_reader
 from utils import data_reader
-from class_wrapper import Network
-from model_maker import Forward, Backward
+from .class_wrapper import Network
+from .model_maker import Forward, Backward
 from utils.helper_functions import put_param_into_folder, write_flags_and_BVE
 
 def training_from_flag(flags):
@@ -45,12 +51,15 @@ def retrain_different_dataset(index):
     This function is to evaluate all different datasets in the model with one function call
     """
     from utils.helper_functions import load_flags
-    data_set_list = ["Peurifoy"]
+    #data_set_list = ["Peurifoy"]
     # data_set_list = ["Chen"]
-    # data_set_list = ["Yang"]
+    data_set_list = ["Yang"]
     for eval_model in data_set_list:
-        flags = load_flags(os.path.join("models", eval_model+"_best_model"))
-        flags.model_name = "retrain" + str(index) + eval_model
+        model_key = eval_model.replace("_sim", "")   # Yang_sim -> Yang
+        seed_dir  = MODEL_BASE / f"{model_key}_best_model"
+        flags = load_flags(seed_dir)
+        flags.data_dir = str((PROJECT_ROOT / "Data").resolve())
+        flags.model_name = f"retrain{index}{eval_model}"
         flags.geoboundary = [-1,1,-1,1]
         flags.batch_size = 1024
         flags.train_step = 500
@@ -94,5 +103,5 @@ if __name__ == '__main__':
 
     # Do the retraining for all the data set to get the training 
     #for i in range(5):
-    for i in range(5, 10):
+    for i in range(7, 8):
        retrain_different_dataset(i)
