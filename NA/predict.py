@@ -22,13 +22,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# PATHS
-PROJECT_ROOT = Path(__file__).resolve().parents[1]              # .../AEM_DIM_Bench
-DATA_ROOT    = PROJECT_ROOT / "Data" / "Yang_sim"
-MODEL_DIR    = DATA_ROOT / "model_param"
-DATAIN_DIR   = DATA_ROOT / "dataIn"
-STATE_DIR    = DATA_ROOT / "state_dicts"
-
 def predict_from_model(pre_trained_model, Xpred_file, no_plot=True, load_state_dict=None):
     """
     Predicting interface. 1. Retreive the flags 2. get data 3. initialize network 4. eval
@@ -73,7 +66,7 @@ def predict_from_model(pre_trained_model, Xpred_file, no_plot=True, load_state_d
 
     return pred_file, truth_file, flags
 
-def ensemble_predict(model_list, Xpred_file, model_dir=None, no_plot=True, remove_extra_files=True, state_dict=False):
+def ensemble_predict(model_list, Xpred_file, model_dir=None, no_plot=True, remove_extra_files=True, state_dict=False, model_dir_root=None):
     """
     This predicts the output from an ensemble of models
     :param model_list: The list of model names to aggregate
@@ -93,8 +86,10 @@ def ensemble_predict(model_list, Xpred_file, model_dir=None, no_plot=True, remov
             # This line is to plot all histogram, make sure comment the pred_list.append line below as well for getting all the histograms
             #pred_file, truth_file, flags = predict_from_model(pre_trained_model, Xpred_file, no_plot=False)
         else:
-            model_folder = str(MODEL_DIR.resolve())
-            pred_file, truth_file, flags = predict_from_model(model_folder, Xpred_file, load_state_dict=pre_trained_model)
+            flags_dir = str((Path(model_dir_root).parent / "model_param").resolve()) \
+                        if model_dir_root else str(FLAGS_DIR.resolve())
+            pred_file, truth_file, flags = predict_from_model(flags_dir, Xpred_file,
+                                                              load_state_dict=pre_trained_model)
         pred_list.append(np.copy(np.expand_dims(pred_file, axis=2)))
     # Take the mean of the predictions
     pred_all = np.concatenate(pred_list, axis=2)
@@ -144,9 +139,9 @@ def ensemble_predict_master(model_dir: Path, Xpred_file: Path, no_plot=True, plo
         if entry.is_dir() or entry.suffix == ".pt":
             model_list.append(str(entry)) 
     if plot_dir is None:
-        return ensemble_predict(model_list, str(Xpred_file), str(model_dir), state_dict=state_dict, no_plot=no_plot)
+        return ensemble_predict(model_list, str(Xpred_file), str(model_dir), state_dict=state_dict, no_plot=no_plot, model_dir_root=model_dir)
     else:
-        return ensemble_predict(model_list, str(Xpred_file), str(plot_dir), state_dict=state_dict, no_plot=no_plot)
+        return ensemble_predict(model_list, str(Xpred_file), str(plot_dir), state_dict=state_dict, no_plot=no_plot, model_dir_root=model_dir)
         
 
 
@@ -167,47 +162,60 @@ def predict_ensemble_for_all(model_dir: Path, xpred_dir: Path, no_plot=True):
 
         ensemble_predict_master(model_dir, f, plot_dir=xpred_dir, no_plot=no_plot)
 
-def creat_mm_dataset():
+def creat_mm_dataset(
+    model_param_dir = None,
+    data_in_dir = None,
+    state_dict_dir = None,
+    num_models = 10):
     """
-    Function to create the meta-material dataset from the saved checkpoint files
-    :return:
+    Build ADM (Yang_sim) spectra via the neural simulator ensemble and save data_y.csv.
+    - model_param_dir: folder that contains flags.obj (e.g., .../Data/Yang_sim/model_param)
+    - data_in_dir:     folder that holds data_x.csv (e.g., .../Data/Yang_sim/dataIn)
+    - state_dict_dir:  folder with mm0.pt ... mm9.pt (e.g., .../Data/Yang_sim/state_dicts)
+    Returns the path to the written data_y.csv
     """
-    # Define model folder
-    model_folder = MODEL_DIR
-    # Load the flags to construct the model
-    flags = load_flags(model_folder)                 # accepts Path
-    flags.eval_model = str(model_folder)            # ensure downstream code gets str
-    ntwk = Network(NA, flags, train_loader=None, test_loader=None, inference_mode=True, saved_model=flags.eval_model)
-    # This is the full file version, which would take a while. Testing pls use the next line one
-    geometry_points = DATAIN_DIR / "data_x.csv"
-    # Small version is for testing, the large file taks a while to be generated...
-    #geometry_points = os.path.join('..', 'Simulated_DataSets', 'Meta_material_Neural_Simulator', 'dataIn', 'data_x_small.csv')
-    Y_filename = geometry_points.parent / geometry_points.name.replace("data_x", "data_y")
+    # ---- Defaults (derived relative to repo root) ----
+    repo_root = Path(__file__).resolve().parents[1]  # .../AEM_DIM_Bench
+    yang_root = repo_root / "Data" / "Yang_sim"
 
-    # Set up the list of prediction files
+    model_param_dir = Path(model_param_dir) if model_param_dir else (yang_root / "model_param")
+    data_in_dir     = Path(data_in_dir)     if data_in_dir     else (yang_root / "dataIn")
+    state_dict_dir  = Path(state_dict_dir)  if state_dict_dir  else (yang_root / "state_dicts")
+
+    geometry_points = data_in_dir / "data_x.csv"
+    y_filename      = data_in_dir / "data_y.csv"  # same name pattern as before
+
+    # ---- Load flags & construct simulator network ----
+    flags = load_flags(str(model_param_dir))   # load_flags expects a dir containing flags.obj
+    flags.eval_model = str(model_param_dir)    # Network() wants a "saved_model" string
+    ntwk = Network(NA, flags, train_loader=None, test_loader=None,
+                   inference_mode=True, saved_model=flags.eval_model)
+
+    # ---- Run ensemble of state dicts ----
     pred_list = []
-    num_models = 10
-
-    # for each model saved, load the dictionary and do the inference
     for i in range(num_models):
-        print('predicting for {}th model saved'.format(i+1))
-        state_dict_file = STATE_DIR / f"mm{i}.pt"
-        pred_file, truth_file = ntwk.predict(Xpred_file=str(geometry_points), 
-        load_state_dict=str(state_dict_file), no_save=True)
-        pred_list.append(pred_file)
+        sd_path = state_dict_dir / f"mm{i}.pt"
+        if not sd_path.exists():
+            print(f"[creat_mm_dataset] WARNING: missing {sd_path}, skipping.")
+            continue
+        print(f"[creat_mm_dataset] predicting with {sd_path.name} ...")
+        pred_np, _ = ntwk.predict(
+            Xpred_file=str(geometry_points),
+            load_state_dict=str(sd_path),
+            no_save=True
+        )
+        pred_list.append(pred_np)
 
-    Y_ensemble = np.zeros(shape=(*np.shape(pred_file), num_models))
-    # Combine the predictions by doing the average
-    for i in range(num_models):
-        Y_ensemble[:, : ,i] = pred_list[i]
+    if not pred_list:
+        raise RuntimeError("[creat_mm_dataset] No predictions produced (no state dicts found?).")
 
-    Y_ensemble = np.mean(Y_ensemble, axis=2)
-    #X = pd.read_csv(geometry_points, header=None, sep=' ').values
-    #MM_data = np.concatenate((X, Y_ensemble), axis=1)
-    #MM_data_file = geometry_points.replace('data_x', 'dataIn/MM_data')
-    np.savetxt(str(Y_filename), Y_ensemble)
-    #np.savetxt(MM_data_file, MM_data)
+    # ---- Average predictions and save ----
+    # pred_np has shape (N, 2000). Stack -> (N, 2000, K), mean over K.
+    Y_ensemble = np.mean(np.stack(pred_list, axis=2), axis=2)
+    np.savetxt(str(y_filename), Y_ensemble)
 
+    print(f"[creat_mm_dataset] wrote {y_filename} with shape {Y_ensemble.shape}")
+    return y_filename
 
 if __name__ == '__main__':
     # To create Meta-material dataset, use this line 
@@ -216,15 +224,25 @@ if __name__ == '__main__':
     #print('Time is spend on producing MM dataset is {}'.format(time.time()-start))
     
     # multi evaluation 
-    method_list = ['NA']
+    method_list = ['Tandem']
+    
     #method_list = ['Tandem','MDN','INN','cINN','VAE','GA','NA','NN']
-    OUT_BASE = Path(__file__).resolve().parent / "data"
+    PROJECT_ROOT = Path(__file__).resolve().parents[1]  # /data/users/sl636/AEM_DIM_Bench
+    STATE_DIR = PROJECT_ROOT / "Data" / "Yang_sim" / "state_dicts"  # shared state dicts
+    FLAGS_DIR = STATE_DIR.parent / "model_param"   
+
     for method in method_list:
         print("Predicting ensemble for method:", method)
-        out_dir = OUT_BASE    # evaluation.py already wrote Xpred files here
+        MODEL_ROOT = PROJECT_ROOT / method
+        DATA_DIR   = MODEL_ROOT / "data"
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+        print(f"Using DATA_DIR:   {DATA_DIR}")
+        print(f"Using STATE_DIR:  {STATE_DIR}")
+
         predict_ensemble_for_all(
             STATE_DIR,          # ../Data/Yang_sim/state_dicts
-            out_dir,            # same folder as test_Xpred_*.csv
+            DATA_DIR,            # same folder as test_Xpred_*.csv
             no_plot=True,
         )
     #predict_ensemble_for_all('../Data/Yang_sim/state_dicts/', '/home/sr365/MM_Bench/GA/temp-dat/GA1_chrome_gen_300/Yang_sim', no_plot=True)  
