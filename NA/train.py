@@ -48,8 +48,8 @@ def retrain_different_dataset(index):
     from utils.helper_functions import load_flags
     #data_set_list = ["Peurifoy"]
     # data_set_list = ["Chen"]
-    #data_set_list = ["Yang_sim"]
-    data_set_list = ["Peurifoy","Chen","Yang_sim"]
+    data_set_list = ["Yang_sim"]
+    #data_set_list = ["Peurifoy","Chen","Yang_sim"]
     for eval_model in data_set_list:
         # models are inside the NA package: NA/models/<Name>_best_model
         MODEL_BASE = Path(__file__).resolve().parent / "models"
@@ -62,6 +62,8 @@ def retrain_different_dataset(index):
         flags.train_step = 500
         flags.test_ratio = 0.2
         flags.batch_size = 1000
+        flags.ckpt_dir = str(MODEL_BASE / flags.model_name)
+        os.makedirs(flags.ckpt_dir, exist_ok=True)
         training_from_flag(flags)
 
 if __name__ == '__main__':

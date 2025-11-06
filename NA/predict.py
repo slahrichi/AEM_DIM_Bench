@@ -93,7 +93,7 @@ def ensemble_predict(model_list, Xpred_file, model_dir=None, no_plot=True, remov
             # This line is to plot all histogram, make sure comment the pred_list.append line below as well for getting all the histograms
             #pred_file, truth_file, flags = predict_from_model(pre_trained_model, Xpred_file, no_plot=False)
         else:
-            model_folder = os.path.join('..', 'Data', 'Yang_sim', 'model_param')
+            model_folder = str(MODEL_DIR.resolve())
             pred_file, truth_file, flags = predict_from_model(model_folder, Xpred_file, load_state_dict=pre_trained_model)
         pred_list.append(np.copy(np.expand_dims(pred_file, axis=2)))
     # Take the mean of the predictions
@@ -129,36 +129,43 @@ def predict_all(models_dir="data"):
     return None
 
 
-def ensemble_predict_master(model_dir, Xpred_file, no_plot, plot_dir=None):
-    print("entering folder to predict:", model_dir)
+def ensemble_predict_master(model_dir: Path, Xpred_file: Path, no_plot=True, plot_dir: Path=None):
+    model_dir = Path(model_dir)
     model_list = []
+    print("entering folder to predict:", model_dir)
     
     # patch for new way to load model using state_dict
-    state_dict = False
-    if 'state_dicts' in model_dir:
-        state_dict = True
+    state_dict = (model_dir.name == "state_dicts") or ("state_dicts" in str(model_dir))
 
     # get the list of models to load
-    for model in os.listdir(model_dir):
-        print("entering:", model)
-        if 'skip' in model or '.zip' in model :             # For skipping certain folders
-            continue;
-        if os.path.isdir(os.path.join(model_dir,model)) or '.pt' in model:
-            model_list.append(os.path.join(model_dir, model))
+    for entry in model_dir.iterdir():
+        if entry.name.endswith(".zip") or "skip" in entry.name:
+            continue
+        if entry.is_dir() or entry.suffix == ".pt":
+            model_list.append(str(entry)) 
     if plot_dir is None:
-        return ensemble_predict(model_list, Xpred_file, model_dir, state_dict=state_dict, no_plot=no_plot)
+        return ensemble_predict(model_list, str(Xpred_file), str(model_dir), state_dict=state_dict, no_plot=no_plot)
     else:
-        return ensemble_predict(model_list, Xpred_file, plot_dir, state_dict=state_dict, no_plot=no_plot)
+        return ensemble_predict(model_list, str(Xpred_file), str(plot_dir), state_dict=state_dict, no_plot=no_plot)
         
 
 
-def predict_ensemble_for_all(model_dir, Xpred_file_dirs, no_plot):
-    for files in os.listdir(Xpred_file_dirs):
-        if 'Xpred' in files and 'Yang' in files:
-            # If this has already been predicted, skip this file!
-            if os.path.isfile(Xpred_file_dirs.replace('Xpred','Ypred')):
-                continue
-            ensemble_predict_master(model_dir, os.path.join(Xpred_file_dirs, files), plot_dir=Xpred_file_dirs, no_plot=no_plot)
+def predict_ensemble_for_all(model_dir: Path, xpred_dir: Path, no_plot=True):
+    model_dir = Path(model_dir)
+    xpred_dir = Path(xpred_dir)
+    xpred_dir.mkdir(parents=True, exist_ok=True)
+    print("Predicting ensemble for all Xpred files in:", xpred_dir)
+    for f in xpred_dir.iterdir():
+        if not f.is_file():
+            continue
+        if "Xpred" not in f.name or "Yang" not in f.name:
+            continue
+
+        ypred_path = f.with_name(f.name.replace("Xpred", "Ypred"))
+        if ypred_path.exists():
+            continue
+
+        ensemble_predict_master(model_dir, f, plot_dir=xpred_dir, no_plot=no_plot)
 
 def creat_mm_dataset():
     """
@@ -205,14 +212,21 @@ def creat_mm_dataset():
 if __name__ == '__main__':
     # To create Meta-material dataset, use this line 
     start = time.time()
-    creat_mm_dataset()
-    print('Time is spend on producing MM dataset is {}'.format(time.time()-start))
+    #creat_mm_dataset()
+    #print('Time is spend on producing MM dataset is {}'.format(time.time()-start))
     
     # multi evaluation 
+    method_list = ['NA']
     #method_list = ['Tandem','MDN','INN','cINN','VAE','GA','NA','NN']
-    #for method in method_list:
-    #   predict_ensemble_for_all('../Data/Yang_sim/state_dicts/', '../mm_bench_multi_eval/' + method + '/Yang_sim/', no_plot=True)  
-    
+    OUT_BASE = Path(__file__).resolve().parent / "data"
+    for method in method_list:
+        print("Predicting ensemble for method:", method)
+        out_dir = OUT_BASE    # evaluation.py already wrote Xpred files here
+        predict_ensemble_for_all(
+            STATE_DIR,          # ../Data/Yang_sim/state_dicts
+            out_dir,            # same folder as test_Xpred_*.csv
+            no_plot=True,
+        )
     #predict_ensemble_for_all('../Data/Yang_sim/state_dicts/', '/home/sr365/MM_Bench/GA/temp-dat/GA1_chrome_gen_300/Yang_sim', no_plot=True)  
     
     #predict_from_model("models/Yang_sim_best_model", 'data/test_Xpred_Yang_best_model.csv', no_plot=False, load_state_dict=None)

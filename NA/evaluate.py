@@ -9,9 +9,9 @@ sys.path.append('../utils/')
 # Torch
 
 # Own
-import flag_reader
-from class_wrapper import Network
-from model_maker import NA
+from . import flag_reader
+from .class_wrapper import Network
+from .model_maker import NA
 from utils import data_reader
 from utils.helper_functions import load_flags
 from utils.evaluation_helper import plotMSELossDistrib
@@ -63,7 +63,7 @@ def predict_different_dataset(multi_flag=False):
 
 def evaluate_from_model(model_dir, multi_flag=False, eval_data_all=False, save_misc=False, 
                         MSE_Simulator=False, save_Simulator_Ypred=True, 
-                        init_lr=0.01, lr_decay=0.9, BDY_strength=1, save_dir='data/',
+                        init_lr=0.01, lr_decay=0.9, BDY_strength=1, save_dir=None,
                         noise_level=0, 
                         md_coeff=0, md_start=None, md_end=None, md_radius=None,
                         eval_batch_size=None):
@@ -119,6 +119,9 @@ def evaluate_from_model(model_dir, multi_flag=False, eval_data_all=False, save_m
 
     # Evaluation process
     print("Start eval now:")
+    if save_dir is None:
+        save_dir = Path(__file__).resolve().parent / "data"
+
     if multi_flag:
         #dest_dir = '/home/sr365/mm_bench_multi_eval_Chen_sweep/NA_init_lr_{}_decay_{}_batch_{}_bp_{}_noise_lvl_{}/'.format(init_lr, lr_decay, flags.eval_batch_size, flags.backprop_step, noise_level)
         #dest_dir = '/home/sr365/mm_bench_compare_MDNA_loss/NA_init_lr_{}_decay_{}_MD_loss_{}'.format(flags.lr, flags.lr_decay_rate, flags.md_coeff)
@@ -281,13 +284,13 @@ if __name__ == '__main__':
     # This is to run the single evaluation, please run this first to make sure the current model is well-trained before going to the multiple evaluation code below
     #evaluate_different_dataset(multi_flag=False, eval_data_all=False, save_Simulator_Ypred=True, MSE_Simulator=False)
     # This is for multi evaluation for generating the Fig 3, evaluating the models under various T values
-    evaluate_different_dataset(multi_flag=True, eval_data_all=False, save_Simulator_Ypred=True, MSE_Simulator=False)
+    #evaluate_different_dataset(multi_flag=True, eval_data_all=False, save_Simulator_Ypred=True, MSE_Simulator=False)
     
     # This is to test the BDY and LR effect of the NA method specially for Robo and Ballistics dataset, 2021.01.09 code trail for investigating why sometimes NA constrait the other methods
     #evaluate_trail_BDY_lr(multi_flag=True, eval_data_all=False, save_Simulator_Ypred=True, MSE_Simulator=False)
 
     #hyper_sweep_evaluation(multi_flag=True, eval_data_all=False, save_Simulator_Ypred=True, MSE_Simulator=False)
-    #evaluate_from_model('models/retrain1Peurifoy/')
+    evaluate_from_model('models/retrain7Yang_sim/', save_dir=None)
     #evaluate_all('models/Peurifoy')
     ###########
     # Predict #
