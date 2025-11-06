@@ -1,21 +1,23 @@
 """
 This file serves as a training interface for training the network
 """
-# Built in
+# Built in  
 import glob
 import os
 import shutil
 import random
 import sys
+from pathlib import Path
+
 sys.path.append('../utils/')
 
 # Torch
 
 # Own
-import flag_reader
+from . import flag_reader
 from utils import data_reader
-from class_wrapper import Network
-from model_maker import NA
+from .class_wrapper import Network
+from .model_maker import NA
 from utils.helper_functions import put_param_into_folder, write_flags_and_BVE
 
 def training_from_flag(flags):
@@ -44,13 +46,19 @@ def retrain_different_dataset(index):
     This function is to evaluate all different datasets in the model with one function call
     """
     from utils.helper_functions import load_flags
-    data_set_list = ["Peurifoy"]
+    #data_set_list = ["Peurifoy"]
     # data_set_list = ["Chen"]
-    # data_set_list = ["Yang"]
-    #data_set_list = ["Peurifoy","Chen","Yang_sim"]
+    #data_set_list = ["Yang_sim"]
+    data_set_list = ["Peurifoy","Chen","Yang_sim"]
     for eval_model in data_set_list:
-        flags = load_flags(os.path.join("models", eval_model+"_best_model"))
+        # models are inside the NA package: NA/models/<Name>_best_model
+        MODEL_BASE = Path(__file__).resolve().parent / "models"
+        model_key = eval_model.replace("_sim", "")          # <<< add this line
+        flags = load_flags(MODEL_BASE / f"{model_key}_best_model")
+        #flags = load_flags(MODEL_BASE / f"{eval_model}_best_model")
         flags.model_name = "retrain" + str(index) + eval_model
+        PROJECT_ROOT = Path(__file__).resolve().parents[1]
+        flags.data_dir = str(PROJECT_ROOT / "Data")
         flags.train_step = 500
         flags.test_ratio = 0.2
         flags.batch_size = 1000
@@ -61,7 +69,7 @@ if __name__ == '__main__':
     #hyperswipe()
     flags = flag_reader.read_flag()  	#setting the base case
     
-    # training_from_flag(flags)
+    #training_from_flag(flags)
     # Do the retraining for all the data set to get the model
     #for i in range(6, 10):
     #   retrain_different_dataset(i)

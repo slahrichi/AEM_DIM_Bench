@@ -12,9 +12,9 @@ import numpy.polynomial.chebyshev as cheb
 import numpy.polynomial.legendre as legend
 from numpy.testing import assert_equal,assert_almost_equal,assert_raises
 import pickle
+from pathlib import Path
 
-#FOLDER_PATH = 'C:\\Users\\Lab User\\Desktop\\Ashwin\\MM_Bench\\Data\\Chen'
-FOLDER_PATH = '/home/sr365/MM_Bench/Data/Chen'
+FOLDER_PATH = Path(os.environ.get("AEM_DIM_Bench/Data/Chen", Path(__file__).resolve().parent))
 #from numba import jit
 
 def cheb_fitcurve( x,y,order ):
@@ -218,8 +218,8 @@ def GraSi3N4_init(r_seed,model, config=None):
 
     t0 = time.time()
     n_dict = N_Dict(config)
-    n_dict.Load("Si3N4", os.path.join(FOLDER_PATH, "Si3N4_310nm-14280nm.txt"), scale=1000);
-    n_dict.Load("Graphene", os.path.join(FOLDER_PATH,"Graphene_240nm-30000nm.txt"));
+    n_dict.Load("Si3N4", str(FOLDER_PATH / "Si3N4_310nm-14280nm.txt"), scale=1000)
+    n_dict.Load("Graphene", str(FOLDER_PATH / "Graphene_240nm-30000nm.txt"))
     n_dict.InitMap2(["Si3N4", "Graphene"], config.lenda_tic)
     config.n_dict = n_dict
     return config
